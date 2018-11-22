@@ -46,10 +46,10 @@ def load_image(filename):
 
 def _load_image():
   """Loads a PNG image file."""
-  img_names = os.listdir('D:/Dataset/Webtoon/train_sound')
+  img_names = os.listdir(args.data_dir)
   dataset = []
   for img_name in img_names:
-    tmp = scipy.misc.imread('D:/Dataset/Webtoon/train_sound' + "/" + img_name, mode='RGB')
+    tmp = scipy.misc.imread(args.data_dir + "/" + img_name, mode='RGB')
     tmp = tmp / 255
     dataset.append(tmp) 
   return dataset
@@ -327,7 +327,10 @@ if __name__ == "__main__":
       "--checkpoint_dir", default="train",
       help="Directory where to save/load model checkpoints.")
   parser.add_argument(
-      "--data_glob", default="images/*.png",
+      "--data_dir", default="D:/Dataset/Webtoon/train_sound",
+      help="Directory of training dataset")
+  parser.add_argument(
+      "--da", default="images/*.png",
       help="Glob pattern identifying training data. This pattern must expand "
            "to a list of RGB images in PNG format which all have the same "
            "shape.")
