@@ -32,8 +32,7 @@ import argparse
 import numpy as np
 import tensorflow as tf
 import tensorflow_compression as tfc
-import os, random, time
-import scipy.misc
+import os 
 
 def load_image(filename):
   """Loads a PNG image file."""
@@ -44,28 +43,6 @@ def load_image(filename):
   image /= 255
   return image
 
-def _load_image():
-  """Loads a PNG image file."""
-  img_names = os.listdir('D:/Dataset/Webtoon/train_sound')
-  dataset = []
-  for img_name in img_names:
-    tmp = scipy.misc.imread('D:/Dataset/Webtoon/train_sound' + "/" + img_name, mode='RGB')
-    tmp = tmp / 255
-    dataset.append(tmp) 
-  return dataset
-
-def get_batch(dataset):
-  batch = []
-  for i in range(args.batchsize):
-    # select image
-    idx_img = random.randrange(100)
-    tmp = dataset[idx_img]
-    y, x, _ = tmp.shape
-    in_x = random.randint(0, x - args.patchsize)
-    in_y = random.randint(0, y - args.patchsize)
-    tmp = tmp[in_y:in_y + args.patchsize, in_x:in_x + args.patchsize]  
-    batch.append(tmp) 
-  return batch
 
 def save_image(filename, image):
   """Saves an image to a PNG file."""
@@ -130,24 +107,19 @@ def synthesis_transform(tensor, num_filters):
 def train():
   """Trains the model."""
 
-  # if args.verbose:
-  #   tf.logging.set_verbosity(tf.logging.INFO)
+  if args.verbose:
+    tf.logging.set_verbosity(tf.logging.INFO)
 
-  # # Load all training images into a constant.
-  # images = tf.map_fn(
-  #     load_image, tf.matching_files(args.data_glob),
-  #     dtype=tf.float32, back_prop=False)
-  # with tf.Session() as sess:
-  #   images = tf.constant(sess.run(images), name="images")
+  # Load all training images into a constant.
+  images = tf.map_fn(
+      load_image, tf.matching_files(args.data_glob),
+      dtype=tf.float32, back_prop=False)
+  with tf.Session() as sess:
+    images = tf.constant(sess.run(images), name="images")
 
-  # # Training inputs are random crops out of the images tensor.
-  # crop_shape = (args.batchsize, args.patchsize, args.patchsize, 3)
-  # x = tf.random_crop(images, crop_shape)
-  # num_pixels = np.prod(crop_shape[:-1])
-
-
+  # Training inputs are random crops out of the images tensor.
   crop_shape = (args.batchsize, args.patchsize, args.patchsize, 3)
-  x = tf.placeholder(tf.float32, crop_shape)
+  x = tf.random_crop(images, crop_shape)
   num_pixels = np.prod(crop_shape[:-1])
 
   # Build autoencoder.
@@ -187,20 +159,19 @@ def train():
 
   # create tensorflow session
   with tf.Session() as sess:
+    # if not os.path.exists(args.checkpoint_dir):
+    #   os.makedirs(args.checkpoint_dir)
     sess.run(tf.global_variables_initializer())
 
     print('Training is started!')
-    dataset = _load_image()
-
     for _ in range(args.last_step):
-      img_batch = get_batch(dataset)
-      _, train_summary, loss, global_step = sess.run([train_op, merged, train_loss, step], feed_dict={x: img_batch})
+      _, train_summary, loss, global_step = sess.run([train_op, merged, train_loss, step])
 
       if global_step % 1000 == 0:
         writer.add_summary(train_summary, global_step=global_step)
         print('step: %d / %d' %(global_step, args.last_step))
 
-      if global_step % 100000 == 0:
+      if global_step % 50000 == 0:
         saver.save(sess=sess, save_path=args.checkpoint_dir+"/model.ckpt", global_step=global_step)
         print('Model is saved!')
     print('Training is finished!')
@@ -250,7 +221,6 @@ def compress():
 
     # If requested, transform the quantized image back and measure performance.
     if args.verbose:
-      # To print the results, the size of images must be a multiple of 16. 
       eval_bpp, mse, num_pixels = sess.run([eval_bpp, mse, num_pixels])
 
       # The actual bits per pixel including overhead.
@@ -290,13 +260,7 @@ def decompress():
   with tf.Session() as sess:
     latest = tf.train.latest_checkpoint(checkpoint_dir=args.checkpoint_dir)
     tf.train.Saver().restore(sess, save_path=latest)
-    
-    n = 1
-    start = time.time()
-    for _ in range(n):
-      sess.run(op)
-    end = time.time()
-    print('time: ', (end - start)/n)
+    sess.run(op)
 
 
 if __name__ == "__main__":
