@@ -54,16 +54,26 @@ def _load_image():
     dataset.append(tmp) 
   return dataset, img_names
 
-def get_batch(dataset):
+def get_batch(dataset, num_train):
   batch = []
   for i in range(args.batchsize):
     # select image
-    idx_img = random.randrange(100)
+    idx_img = random.randrange(num_train)
     tmp = dataset[idx_img]
     y, x, _ = tmp.shape
     in_x = random.randint(0, x - args.patchsize)
     in_y = random.randint(0, y - args.patchsize)
     tmp = tmp[in_y:in_y + args.patchsize, in_x:in_x + args.patchsize]  
+
+    # random rotate
+    rot_num = random.randint(1, 4)
+    tmp = np.rot90(tmp, rot_num)
+    
+    # random flip left-to-right
+    flipflag = random.random() > 0.5
+    if flipflag:
+        tmp = np.fliplr(tmp) 
+
     batch.append(tmp) 
   return batch
 
@@ -193,10 +203,10 @@ def train():
     os.makedirs(file_dir)
 
     print('Training is started!')
-    dataset = _load_image()
+    dataset, img_names = _load_image()
 
     for _ in range(args.last_step):
-      img_batch = get_batch(dataset)
+      img_batch = get_batch(dataset, len(img_names))
       _, train_summary, loss, global_step = sess.run([train_op, merged, train_loss, step], feed_dict={x: img_batch})
 
       if global_step % 1000 == 0:
@@ -261,13 +271,14 @@ def compress():
       # If requested, transform the quantized image back and measure performance.
       if args.verbose:
         # To print the results, the size of images must be a multiple of 16. 
-        eval_bpp, mse, num_pixels = sess.run([eval_bpp, mse, num_pixels])
+        # eval_bpp, mse, num_pixels = sess.run([eval_bpp, mse, num_pixels], feed_dict={x: [img]})
+        _eval_bpp, _num_pixels = sess.run([eval_bpp, num_pixels], feed_dict={x: [img]})
 
         # The actual bits per pixel including overhead.
-        bpp = (8 + len(string)) * 8 / num_pixels
+        bpp = (8 + len(_string)) * 8 / _num_pixels
 
-        print("Mean squared error: {:0.4}".format(mse))
-        print("Information content of this image in bpp: {:0.4}".format(eval_bpp))
+        # print("Mean squared error: {:0.4}".format(mse))
+        print("Information content of this image in bpp: {:0.4}".format(_eval_bpp))
         print("Actual bits per pixel for this image: {:0.4}".format(bpp))
 
 def decompress(file_name, out_name):
