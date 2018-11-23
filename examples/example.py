@@ -52,7 +52,7 @@ def _load_image():
     tmp = scipy.misc.imread(args.data_dir + "/" + img_name, mode='RGB')
     tmp = tmp / 255
     dataset.append(tmp) 
-  return dataset
+  return dataset, img_names
 
 def get_batch(dataset):
   batch = []
@@ -189,6 +189,9 @@ def train():
   with tf.Session() as sess:
     sess.run(tf.global_variables_initializer())
 
+    file_dir = args.checkpoint_dir + '/results' 
+    os.makedirs(file_dir)
+
     print('Training is started!')
     dataset = _load_image()
 
@@ -210,9 +213,10 @@ def compress():
   """Compresses an image."""
 
   # Load input image and add batch dimension.
-  x = load_image(args.input)
-  x = tf.expand_dims(x, 0)
-  x.set_shape([1, None, None, 3])
+  # x = load_image(args.input)
+  # x = tf.expand_dims(x, 0)
+  # x.set_shape([1, None, None, 3])
+  x = tf.placeholder(tf.float32, [1, None, None, 3])
 
   # Transform and compress the image, then remove batch dimension.
   y = analysis_transform(x, args.num_filters)
@@ -236,36 +240,40 @@ def compress():
   mse = tf.reduce_sum(tf.squared_difference(x * 255, x_hat)) / num_pixels
 
   with tf.Session() as sess:
-    # Load the latest model checkpoint, get the compressed string and the tensor
-    # shapes.
+    # Load the latest model checkpoint and test images. 
     latest = tf.train.latest_checkpoint(checkpoint_dir=args.checkpoint_dir)
     tf.train.Saver().restore(sess, save_path=latest)
-    string, x_shape, y_shape = sess.run([string, tf.shape(x), tf.shape(y)])
+    dataset, img_names = _load_image()
 
-    # Write a binary file with the shape information and the compressed string.
-    with open(args.output, "wb") as f:
-      f.write(np.array(x_shape[1:-1], dtype=np.uint16).tobytes())
-      f.write(np.array(y_shape[1:-1], dtype=np.uint16).tobytes())
-      f.write(string)
+    for img, img_name in zip(dataset, img_names):
+      # Get the compressed string and the tensor shapes.
+      _string, x_shape, y_shape = sess.run([string, tf.shape(x), tf.shape(y)], feed_dict={x: [img]})
 
-    # If requested, transform the quantized image back and measure performance.
-    if args.verbose:
-      # To print the results, the size of images must be a multiple of 16. 
-      eval_bpp, mse, num_pixels = sess.run([eval_bpp, mse, num_pixels])
+      # Write a binary file with the shape information and the compressed string.
+      file_name = args.checkpoint_dir + '/results/' + img_name[:-4] + '.bin'
+      with open(file_name, "wb") as f:
 
-      # The actual bits per pixel including overhead.
-      bpp = (8 + len(string)) * 8 / num_pixels
+      # with open(args.output, "wb") as f:
+        f.write(np.array(x_shape[1:-1], dtype=np.uint16).tobytes())
+        f.write(np.array(y_shape[1:-1], dtype=np.uint16).tobytes())
+        f.write(_string)
 
-      print("Mean squared error: {:0.4}".format(mse))
-      print("Information content of this image in bpp: {:0.4}".format(eval_bpp))
-      print("Actual bits per pixel for this image: {:0.4}".format(bpp))
+      # If requested, transform the quantized image back and measure performance.
+      if args.verbose:
+        # To print the results, the size of images must be a multiple of 16. 
+        eval_bpp, mse, num_pixels = sess.run([eval_bpp, mse, num_pixels])
 
+        # The actual bits per pixel including overhead.
+        bpp = (8 + len(string)) * 8 / num_pixels
 
-def decompress():
+        print("Mean squared error: {:0.4}".format(mse))
+        print("Information content of this image in bpp: {:0.4}".format(eval_bpp))
+        print("Actual bits per pixel for this image: {:0.4}".format(bpp))
+
+def decompress(file_name, out_name):
   """Decompresses an image."""
-
   # Read the shape information and compressed string from the binary file.
-  with open(args.input, "rb") as f:
+  with open(file_name, "rb") as f:
     x_shape = np.frombuffer(f.read(4), dtype=np.uint16)
     y_shape = np.frombuffer(f.read(4), dtype=np.uint16)
     string = f.read()
@@ -284,19 +292,20 @@ def decompress():
   x_hat = x_hat[0, :x_shape[0], :x_shape[1], :]
 
   # Write reconstructed image out as a PNG file.
-  op = save_image(args.output, x_hat)
+  op = save_image(out_name, x_hat)
 
   # Load the latest model checkpoint, and perform the above actions.
   with tf.Session() as sess:
     latest = tf.train.latest_checkpoint(checkpoint_dir=args.checkpoint_dir)
     tf.train.Saver().restore(sess, save_path=latest)
-    
-    n = 1
-    start = time.time()
-    for _ in range(n):
-      sess.run(op)
-    end = time.time()
-    print('time: ', (end - start)/n)
+    sess.run(op)
+
+    # n = 1
+    # start = time.time()
+    # for _ in range(n):
+    #   sess.run(op)
+    # end = time.time()
+    # print('time: ', (end - start)/n)
 
 
 if __name__ == "__main__":
@@ -358,10 +367,16 @@ if __name__ == "__main__":
   if args.command == "train":
     train()
   elif args.command == "compress":
-    if args.input is None or args.output is None:
-      raise ValueError("Need input and output filename for compression.")
+    # if args.input is None or args.output is None:
+    #   raise ValueError("Need input and output filename for compression.")
     compress()
   elif args.command == "decompress":
-    if args.input is None or args.output is None:
-      raise ValueError("Need input and output filename for decompression.")
-    decompress()
+    # if args.input is None or args.output is None:
+    #   raise ValueError("Need input and output filename for decompression.")
+    
+    _, img_names = _load_image()
+    for img_name in img_names: 
+      file_name = args.checkpoint_dir + '/results/' + img_name[:-4] + '.bin'
+      out_name = args.checkpoint_dir + '/results/' + img_name
+      decompress(file_name, out_name)
+      tf.reset_default_graph()
