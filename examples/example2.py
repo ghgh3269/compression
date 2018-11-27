@@ -118,7 +118,7 @@ def analysis_transform(tensor, num_filters):
     with tf.variable_scope("layer_2"):
       layer = tfc.SignalConv2D(
           num_filters, (5, 5), corr=True, strides_down=2, padding="same_zeros",
-          use_bias=False, activation=tfc.GDN())
+          use_bias=True, activation=tfc.GDN())
       tensor = layer(tensor)
 
     with tf.variable_scope("layer_3"):
