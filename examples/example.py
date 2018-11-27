@@ -86,6 +86,18 @@ def save_image(filename, image):
   string = tf.image.encode_png(image)
   return tf.write_file(filename, string)
 
+def ram(x, num_feats, ratio=16):
+    with tf.variable_scope('CA'):
+        _, tmp_var = tf.nn.moments(x, axes=[1,2])  
+        tmp_ca = tf.layers.dense(tmp_var, num_feats//ratio, activation=tf.nn.relu, kernel_initializer=tf.contrib.layers.variance_scaling_initializer())
+        tmp_ca = tf.layers.dense(tmp_ca, num_feats)
+        tmp_ca = tf.expand_dims(tf.expand_dims(tmp_ca, 1),1)
+    with tf.variable_scope('SA'):
+        W = tf.get_variable("W", shape=[3,3,num_feats,1], initializer=tf.contrib.layers.xavier_initializer())
+        b = tf.get_variable("b", shape=[num_feats], initializer=tf.zeros_initializer)       
+        tmp_sa = tf.nn.depthwise_conv2d(x, filter=W, strides=[1,1,1,1], padding='SAME') + b
+    attention = tf.sigmoid(tmp_ca+tmp_sa)
+    return attention * x
 
 def analysis_transform(tensor, num_filters):
   """Builds the analysis transform."""
@@ -108,7 +120,7 @@ def analysis_transform(tensor, num_filters):
           num_filters, (5, 5), corr=True, strides_down=2, padding="same_zeros",
           use_bias=False, activation=None)
       tensor = layer(tensor)
-
+      # tensor = ram(tensor, num_filters)
     return tensor
 
 
@@ -136,6 +148,19 @@ def synthesis_transform(tensor, num_filters):
 
     return tensor
 
+def count_num_trainable_params():
+    tot_nb_params = 0
+    for trainable_variable in tf.trainable_variables():
+        shape = trainable_variable.get_shape() # e.g [D,F] or [W,H,C]
+        current_nb_params = get_num_params_shape(shape)
+        tot_nb_params = tot_nb_params + current_nb_params
+    return tot_nb_params
+
+def get_num_params_shape(shape):
+    nb_params = 1
+    for dim in shape:
+        nb_params = nb_params*int(dim)
+    return nb_params 
 
 def train():
   """Trains the model."""
@@ -187,7 +212,11 @@ def train():
 
   train_op = tf.group(main_step, aux_step, entropy_bottleneck.updates[0])
 
-  # 
+  # number of parameters
+  num_params = count_num_trainable_params()
+  print("num_params: %d" % num_params)
+
+  # For tensorboard
   tf.summary.scalar('loss', train_loss)
   tf.summary.scalar('bpp', train_bpp)
   tf.summary.scalar('mse', train_mse)
