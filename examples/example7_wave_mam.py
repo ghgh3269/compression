@@ -159,7 +159,7 @@ def analysis_transform(tensor, wave, num_filters):
       layer = tfc.SignalConv2D(
           num_filters, (5, 5), corr=True, strides_down=2, padding="same_zeros",
           use_bias=True, activation=None)
-      tensor = tensor + MAM(conv2(conv1(tensor)), num_filters)
+      tensor = tensor + MAM(conv2(conv1(tensor_)), num_filters)
       tensor = layer(tensor)
 
     with tf.variable_scope("layer_2"):
