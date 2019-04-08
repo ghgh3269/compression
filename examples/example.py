@@ -47,6 +47,7 @@ def load_image(filename):
 def _load_image():
   """Loads a PNG image file."""
   img_names = os.listdir(args.data_dir)
+  img_names = [img_name for img_name in img_names if not img_name == 'Thumbs.db']
   dataset = []
   for img_name in img_names:
     tmp = scipy.misc.imread(args.data_dir + "/" + img_name, mode='RGB')
@@ -86,19 +87,6 @@ def save_image(filename, image):
   string = tf.image.encode_png(image)
   return tf.write_file(filename, string)
 
-def ram(x, num_feats, ratio=16):
-    with tf.variable_scope('CA'):
-        _, tmp_var = tf.nn.moments(x, axes=[1,2])  
-        tmp_ca = tf.layers.dense(tmp_var, num_feats//ratio, activation=tf.nn.relu, kernel_initializer=tf.contrib.layers.variance_scaling_initializer())
-        tmp_ca = tf.layers.dense(tmp_ca, num_feats)
-        tmp_ca = tf.expand_dims(tf.expand_dims(tmp_ca, 1),1)
-    with tf.variable_scope('SA'):
-        W = tf.get_variable("W", shape=[3,3,num_feats,1], initializer=tf.contrib.layers.xavier_initializer())
-        b = tf.get_variable("b", shape=[num_feats], initializer=tf.zeros_initializer)       
-        tmp_sa = tf.nn.depthwise_conv2d(x, filter=W, strides=[1,1,1,1], padding='SAME') + b
-    attention = tf.sigmoid(tmp_ca+tmp_sa)
-    return attention * x
-
 def analysis_transform(tensor, num_filters):
   """Builds the analysis transform."""
 
@@ -120,7 +108,6 @@ def analysis_transform(tensor, num_filters):
           num_filters, (5, 5), corr=True, strides_down=2, padding="same_zeros",
           use_bias=False, activation=None)
       tensor = layer(tensor)
-      # tensor = ram(tensor, num_filters)
     return tensor
 
 
