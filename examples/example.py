@@ -46,12 +46,13 @@ def load_image(filename):
 
 def _load_image():
   """Loads a PNG image file."""
-  img_names = os.listdir(args.data_dir)
-  img_names = [img_name for img_name in img_names if not img_name == 'Thumbs.db']
+  # img_names = os.listdir(args.data_dir)
+  # img_names = [img_name for img_name in img_names if not img_name == 'Thumbs.db']
+  img_names = sorted([f for f in os.listdir(args.data_dir) if not f=='Thumbs.db'])[:args.trainsize]
   dataset = []
   for img_name in img_names:
     tmp = scipy.misc.imread(args.data_dir + "/" + img_name, mode='RGB')
-    tmp = tmp / 255
+    # tmp = tmp / 255
     dataset.append(tmp) 
   return dataset, img_names
 
@@ -66,14 +67,14 @@ def get_batch(dataset, num_train):
     in_y = random.randint(0, y - args.patchsize)
     tmp = tmp[in_y:in_y + args.patchsize, in_x:in_x + args.patchsize]  
 
-    # random rotate
-    rot_num = random.randint(1, 4)
-    tmp = np.rot90(tmp, rot_num)
+    # # random rotate
+    # rot_num = random.randint(1, 4)
+    # tmp = np.rot90(tmp, rot_num)
     
-    # random flip left-to-right
-    flipflag = random.random() > 0.5
-    if flipflag:
-        tmp = np.fliplr(tmp) 
+    # # random flip left-to-right
+    # flipflag = random.random() > 0.5
+    # if flipflag:
+    #     tmp = np.fliplr(tmp) 
 
     batch.append(tmp) 
   return batch
@@ -182,9 +183,9 @@ def train():
   train_bpp = tf.reduce_sum(tf.log(likelihoods)) / (-np.log(2) * num_pixels)
 
   # Mean squared error across pixels.
-  train_mse = tf.reduce_sum(tf.squared_difference(x, x_tilde))
+  train_mse = tf.reduce_mean(tf.squared_difference(x, x_tilde))
   # Multiply by 255^2 to correct for rescaling.
-  train_mse *= 255 ** 2 / num_pixels
+  # train_mse *= 255 ** 2
 
   # The rate-distortion cost.
   train_loss = args.lmbda * train_mse + train_bpp
@@ -373,6 +374,9 @@ if __name__ == "__main__":
   parser.add_argument(
       "--batchsize", type=int, default=8,
       help="Batch size for training.")
+  parser.add_argument(
+      "--trainsize", type=int, default=359,
+      help="number of training images.")
   parser.add_argument(
       "--patchsize", type=int, default=128,
       help="Size of image patches for training.")
